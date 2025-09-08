@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pode ou Não Pode — Jogo Educativo</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8;--good:#16a34a;--bad:#ef4444;--glass:rgba(255,255,255,0.04)}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:linear-gradient(180deg,#071226 0%, #081a2a 100%); color:#e6eef6}
+    .wrap{max-width:900px;margin:32px auto;padding:22px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:16px;box-shadow:0 8px 30px rgba(2,6,23,0.6)}
+    header{display:flex;gap:16px;align-items:center}
+    header h1{margin:0;font-size:1.6rem}
+    header p{margin:0;color:var(--muted);font-size:0.95rem}
+    .meta{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+    .card{background:var(--card);padding:16px;border-radius:12px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    button{background:var(--glass);border:1px solid rgba(255,255,255,0.04);color:inherit;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:600}
+    button.primary{background:linear-gradient(90deg,var(--accent),#3b82f6);color:#001;box-shadow:0 6px 18px rgba(7,89,100,0.18)}
+    .game-area{margin-top:18px}
+    .question{font-size:1.2rem;padding:18px;border-radius:10px;background:rgba(255,255,255,0.02);min-height:84px;display:flex;align-items:center}
+    .choices{display:flex;gap:12px;margin-top:12px}
+    .choice{flex:1;padding:16px;border-radius:12px;text-align:center;font-weight:700;font-size:1rem}
+    .choice.pode{background:linear-gradient(180deg,rgba(34,197,94,0.15),rgba(34,197,94,0.06));border:1px solid rgba(34,197,94,0.12)}
+    .choice.nao{background:linear-gradient(180deg,rgba(239,68,68,0.12),rgba(239,68,68,0.04));border:1px solid rgba(239,68,68,0.12)}
+    .feedback{margin-top:12px;padding:12px;border-radius:10px}
+    .progress{height:10px;background:rgba(255,255,255,0.04);border-radius:20px;overflow:hidden}
+    .progress > span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#7c3aed);width:0%}
+    .score{font-weight:800;font-size:1.1rem}
+    .leaderboard{margin-top:12px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;text-align:left;border-bottom:1px dashed rgba(255,255,255,0.03)}
+    .small{font-size:0.9rem;color:var(--muted)}
+    @media (max-width:640px){.choices{flex-direction:column}.card{padding:12px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Pode ou Não Pode</h1>
+        <p>Jogo educativo para alunos (≤15 anos) — aprenda o que é seguro perguntar a uma IA generativa.</p>
+        <div class="meta small">Pontos: <span id="scoreDisplay">0</span> · Pergunta <span id="qIndex">0</span>/<span id="qTotal">0</span></div>
+      </div>
+    </header>
+
+    <section class="card game-area" id="startCard">
+      <div class="controls">
+        <button class="primary" id="startBtn">Iniciar Jogo</button>
+        <button id="shuffleBtn">Embaralhar perguntas</button>
+        <button id="resetBtn">Resetar placar local</button>
+        <button id="helpBtn">Ajuda</button>
+      </div>
+      <div class="small" style="margin-top:10px">Dica: use as setas ← → para responder rapidamente. Depois de responder, veja a explicação para aprender.</div>
+    </section>
+
+    <section class="card" id="playCard" style="display:none">
+      <div class="progress" aria-hidden="true" title="Progresso"><span id="progressBar"></span></div>
+      <div class="question" id="questionText"></div>
+      <div class="choices">
+        <button class="choice pode" id="podeBtn">Pode ✅</button>
+        <button class="choice nao" id="naoBtn">Não Pode ❌</button>
+      </div>
+      <div class="feedback" id="feedbackArea" style="display:none"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+        <button id="nextBtn">Próxima pergunta</button>
+        <div class="score">Pontuação: <span id="scoreNow">0</span></div>
+      </div>
+    </section>
+
+    <section class="card" id="endCard" style="display:none;margin-top:14px">
+      <h3>Fim do jogo!</h3>
+      <div class="small">Sua pontuação final: <strong id="finalScore">0</strong></div>
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input id="playerName" placeholder="Seu nome (para o ranking)" />
+        <button id="saveScoreBtn" class="primary">Salvar pontuação</button>
+        <button id="playAgainBtn">Jogar novamente</button>
+        <button id="copyLinkBtn">Copiar link do jogo</button>
+      </div>
+      <div class="leaderboard" id="leaderboardArea"></div>
+    </section>
+
+    <section class="card small" id="helpCard" style="display:none;margin-top:14px">
+      <h3>Como usar</h3>
+      <ul>
+        <li>Leia a pergunta e escolha <strong>Pode</strong> ou <strong>Não Pode</strong>.</li>
+        <li>Acertos somam +10, erros -5 (não fica negativo).</li>
+        <li>Ao final, salve seu nome no ranking local (armazenado no navegador).</li>
+        <li>Para hospedar online: salve este arquivo como <code>index.html</code> e publique no GitHub Pages (instruções abaixo).</li>
+      </ul>
+      <button id="closeHelp">Fechar</button>
+    </section>
+
+    <footer style="margin-top:18px;text-align:center;color:var(--muted);font-size:0.9rem">Versão demo — Desenvolvido para uso educacional.</footer>
+  </div>
+
+  <script>
+    // --- CONFIG: perguntas, respostas e explicações ---
+    const QUESTIONS = [
+      {text: "Posso pedir para a IA me contar a senha do Wi-Fi da escola?", allowed: false, explanation: "Senhas são dados privados. Não peça senhas de outras pessoas ou da escola."},
+      {text: "Posso perguntar o que significa uma palavra difícil em português?", allowed: true, explanation: "Perguntas educacionais e de vocabulário são seguras e incentivadas."},
+      {text: "Posso pedir para a IA criar a prova de matemática do meu professor?", allowed: false, explanation: "Pedir provas prontas que comprometem a avaliação é desonesto e não é permitido."},
+      {text: "Posso pedir ideias para um trabalho escolar sobre reciclagem?", allowed: true, explanation: "Pedir ideias para trabalhos é apropriado e ajuda no aprendizado."},
+      {text: "Posso perguntar o CPF do meu colega de classe?", allowed: false, explanation: "Dados pessoais de outras pessoas (CPF, endereço, telefone) não devem ser solicitados ou divulgados."},
+      {text: "Posso pedir ajuda para entender uma conta de divisão?", allowed: true, explanation: "Ajuda com exercícios é útil — peça explicações passo a passo, não soluções de prova."},
+      {text: "Posso pedir à IA para fingir que é outra pessoa e mandar mensagens em meu lugar?", allowed: false, explanation: "Fingir ser outra pessoa é enganoso e pode causar problemas; não é apropriado."},
+      {text: "Posso pedir sugestões de livros divertidos para minha idade?", allowed: true, explanation: "Pedir recomendações de leitura é ótimo para descobrir novos livros."},
+      {text: "Posso pedir a resposta exata de uma avaliação que ainda vou fazer?", allowed: false, explanation: "Pedir respostas de avaliações futuras é trapaça e contra a ética escolar."},
+      {text: "Posso pedir dicas de segurança para usar a internet de forma responsável?", allowed: true, explanation: "Perguntas sobre segurança online são importantes e devem ser feitas."},
+      {text: "Posso pedir para a IA me dar conselhos médicos sérios sobre uma doença grave?", allowed: false, explanation: "Para questões médicas sérias, procure um adulto responsável ou um profissional de saúde — IA não substitui diagnóstico médico."},
+      {text: "Posso pedir à IA para inventar uma história com personagens engraçados?", allowed: true, explanation: "Histórias criativas e lúdicas são ótimas para aprender e se divertir."},
+      {text: "Posso pedir para a IA me ajudar a escrever um bullying anônimo contra alguém?", allowed: false, explanation: "Conteúdo que incentive bullying ou agressão a pessoas não é permitido."},
+      {text: "Posso pedir à IA uma explicação de como funciona a energia solar?", allowed: true, explanation: "Perguntas científicas são bem-vindas e ajudam no estudo."},
+      {text: "Posso pedir o endereço da casa de um famoso que eu gosto?", allowed: false, explanation: "Endereços residenciais são dados pessoais — não peça nem compartilhe."},
+      {text: "Posso pedir para a IA gerar uma imagem criativa para o meu trabalho de ciências?", allowed: true, explanation: "Gerar imagens educativas para projetos é permitido; verifique direitos de uso antes de publicar."},
+      {text: "Posso pedir informações sobre como invadir uma conta de rede social?", allowed: false, explanation: "Instruções para cometer crimes ou invadir contas são perigosas e proibidas."},
+      {text: "Posso pedir à IA para me ajudar a estudar para uma prova de geografia?", allowed: true, explanation: "Pedir resumo, mapas conceituais e exercícios é uma boa utilização da IA."},
+      {text: "Posso pedir uma receita de bolo simples para fazer em casa?", allowed: true, explanation: "Receitas simples e seguras são apropriadas — peça supervisão de um adulto se usar o forno."},
+      {text: "Posso pedir para a IA inventar fofocas reais sobre os colegas da sala?", allowed: false, explanation: "Inventar ou compartilhar fofocas que possam prejudicar outras pessoas não é correto."}
+    ];
+
+    // --- estado ---
+    let questions = [...QUESTIONS];
+    let index = 0;
+    let score = 0;
+    const TOTAL = QUESTIONS.length;
+
+    // --- elementos ---
+    const startBtn = document.getElementById('startBtn');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const helpBtn = document.getElementById('helpBtn');
+    const playCard = document.getElementById('playCard');
+    const startCard = document.getElementById('startCard');
+    const questionText = document.getElementById('questionText');
+    const podeBtn = document.getElementById('podeBtn');
+    const naoBtn = document.getElementById('naoBtn');
+    const feedbackArea = document.getElementById('feedbackArea');
+    const nextBtn = document.getElementById('nextBtn');
+    const scoreNow = document.getElementById('scoreNow');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const qIndex = document.getElementById('qIndex');
+    const qTotal = document.getElementById('qTotal');
+    const progressBar = document.getElementById('progressBar');
+    const endCard = document.getElementById('endCard');
+    const finalScore = document.getElementById('finalScore');
+    const saveScoreBtn = document.getElementById('saveScoreBtn');
+    const playerName = document.getElementById('playerName');
+    const leaderboardArea = document.getElementById('leaderboardArea');
+    const playAgainBtn = document.getElementById('playAgainBtn');
+    const copyLinkBtn = document.getElementById('copyLinkBtn');
+    const helpCard = document.getElementById('helpCard');
+    const helpClose = document.getElementById('closeHelp');
+
+    qTotal.textContent = TOTAL;
+
+    function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+
+    function startGame(){
+      questions = shuffle([...QUESTIONS]);
+      index = 0; score = 0;
+      startCard.style.display = 'none';
+      endCard.style.display = 'none';
+      playCard.style.display = '';
+      updateDisplay();
+      showQuestion();
+    }
+
+    function updateDisplay(){
+      scoreNow.textContent = score;
+      scoreDisplay.textContent = score;
+      qIndex.textContent = index+1;
+      progressBar.style.width = `${((index)/TOTAL)*100}%`;
+    }
+
+    function showQuestion(){
+      const q = questions[index];
+      questionText.textContent = q.text;
+      feedbackArea.style.display = 'none';
+      updateDisplay();
+    }
+
+    function answer(isPode){
+      const q = questions[index];
+      const correct = (isPode === q.allowed);
+      if(correct){score += 10;}
+      else{score = Math.max(0, score - 5);} // não negativo
+      feedbackArea.style.display = '';
+      feedbackArea.style.background = correct ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.06)';
+      feedbackArea.style.borderLeft = `4px solid ${correct ? 'var(--good)' : 'var(--bad)')}`
+      feedbackArea.innerHTML = `<strong>${correct ? 'Correto!' : 'Errado.'}</strong> <div style="margin-top:8px" class="small">${q.explanation}</div>`;
+      index++;
+      updateDisplay();
+      if(index >= TOTAL){
+        // fim
+        setTimeout(()=>endGame(), 800);
+      }
+    }
+
+    function endGame(){
+      playCard.style.display = 'none';
+      endCard.style.display = '';
+      finalScore.textContent = score;
+      renderLeaderboard();
+    }
+
+    function saveScore(){
+      const name = (playerName.value || 'Anônimo').trim().slice(0,30);
+      const list = JSON.parse(localStorage.getItem('podeNao_leaderboard')||'[]');
+      list.push({name,score,date:new Date().toISOString()});
+      list.sort((a,b)=>b.score-a.score);
+      localStorage.setItem('podeNao_leaderboard', JSON.stringify(list.slice(0,50)));
+      renderLeaderboard();
+      alert('Pontuação salva no ranking local!');
+    }
+
+    function renderLeaderboard(){
+      const list = JSON.parse(localStorage.getItem('podeNao_leaderboard')||'[]');
+      if(!list.length){leaderboardArea.innerHTML = '<div class="small">Ranking local vazio. Salve sua pontuação!</div>';return}
+      let html = '<h4>Ranking local (top 10)</h4><table><thead><tr><th>#</th><th>Nome</th><th>Pontos</th><th>Data</th></tr></thead><tbody>';
+      list.slice(0,10).forEach((r,i)=>{html+=`<tr><td>${i+1}</td><td>${escapeHtml(r.name)}</td><td>${r.score}</td><td class="small">${new Date(r.date).toLocaleString()}</td></tr>`});
+      html += '</tbody></table>';
+      leaderboardArea.innerHTML = html;
+    }
+
+    function escapeHtml(s){return String(s).replace(/[&<>"]+/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]||c));}
+
+    // --- listeners ---
+    startBtn.addEventListener('click', startGame);
+    shuffleBtn.addEventListener('click', ()=>{questions = shuffle([...QUESTIONS]);alert('Perguntas embaralhadas!');});
+    resetBtn.addEventListener('click', ()=>{if(confirm('Apagar ranking local?')){localStorage.removeItem('podeNao_leaderboard');renderLeaderboard();alert('Ranking local apagado.')}});
+    helpBtn.addEventListener('click', ()=>{helpCard.style.display='';});
+    helpClose.addEventListener('click', ()=>{helpCard.style.display='none'});
+    podeBtn.addEventListener('click', ()=>{answer(true)});
+    naoBtn.addEventListener('click', ()=>{answer(false)});
+    nextBtn.addEventListener('click', ()=>{ if(index<TOTAL){showQuestion()} else {endGame()} });
+    saveScoreBtn.addEventListener('click', saveScore);
+    playAgainBtn.addEventListener('click', ()=>{startGame()});
+    copyLinkBtn.addEventListener('click', ()=>{navigator.clipboard.writeText(location.href).then(()=>alert('Link copiado!'));});
+
+    // keyboard shortcuts
+    document.addEventListener('keydown', (e)=>{
+      if(playCard.style.display===''){
+        if(e.key==='ArrowLeft') podeBtn.click();
+        if(e.key==='ArrowRight') naoBtn.click();
+      }
+    });
+
+    // initial render
+    document.addEventListener('DOMContentLoaded', ()=>{
+      scoreNow.textContent = score;
+      scoreDisplay.textContent = score;
+      qTotal.textContent = TOTAL;
+      renderLeaderboard();
+    });
+  </script>
+</body>
+</html>
